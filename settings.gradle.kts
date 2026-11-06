@@ -12,6 +12,11 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Lets Gradle download the JDK 17 toolchain when it is not installed.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
