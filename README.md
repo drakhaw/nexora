@@ -53,9 +53,48 @@ Prerequisites: JDK 17 and the Android SDK (platform 36, build-tools 36.0.0).
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
-`./gradlew :app:assembleRelease` produces an unsigned, R8-minified APK.
-Release signing is not set up yet; keep keystores and their passwords out of
-the repository (they are ignored by `.gitignore`).
+## Release
+
+`./gradlew :app:assembleRelease` builds an R8-minified APK. It is signed when
+signing values are available, and unsigned otherwise.
+
+**Local signing.** Create `keystore.properties` in the project root (ignored
+by git). Keep the keystore itself outside the repository:
+
+```properties
+storeFile=/absolute/path/to/nexora-release.jks
+storePassword=...
+keyAlias=nexora
+keyPassword=...
+```
+
+**CI signing.** The same values can come from the environment variables
+`NEXORA_KEYSTORE_FILE`, `NEXORA_KEYSTORE_PASSWORD`, `NEXORA_KEY_ALIAS` and
+`NEXORA_KEY_PASSWORD`.
+
+**Publishing.** [.github/workflows/release.yml](.github/workflows/release.yml)
+runs when a tag like `v0.1.0` is pushed. It runs the unit tests, builds and
+verifies the signed APK, and publishes a GitHub Release with the APK and its
+SHA-256. The tag must match `versionName` in `app/build.gradle.kts`.
+
+It needs these repository secrets (Settings > Secrets and variables > Actions):
+
+| Secret                     | Value                              |
+| -------------------------- | ---------------------------------- |
+| `NEXORA_KEYSTORE_BASE64`   | base64 of the `.jks` file          |
+| `NEXORA_KEYSTORE_PASSWORD` | keystore password                  |
+| `NEXORA_KEY_ALIAS`         | key alias                          |
+| `NEXORA_KEY_PASSWORD`      | key password                       |
+
+To cut a release, bump `versionCode` and `versionName`, commit, then:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Back up the keystore and its password. Android only accepts updates signed
+with the same key, so losing it means users must uninstall to upgrade.
 
 ## Connecting to a TV
 

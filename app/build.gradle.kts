@@ -1,4 +1,5 @@
 import org.gradle.process.ExecOperations
+import java.util.Properties
 import javax.inject.Inject
 
 plugins {
@@ -9,6 +10,25 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+/**
+ * Release signing. Locally the values come from keystore.properties (ignored by
+ * git); in CI from NEXORA_* environment variables. Without them the release APK
+ * is built unsigned.
+ */
+val signingProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) file.inputStream().use(::load)
+}
+
+fun signingValue(property: String, env: String): String? =
+    signingProps.getProperty(property)?.takeIf { it.isNotBlank() } ?: System.getenv(env)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("storeFile", "NEXORA_KEYSTORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "NEXORA_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "NEXORA_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "NEXORA_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { it != null }
 
 android {
     namespace = "im.wisnu.nexora"
@@ -22,8 +42,20 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
