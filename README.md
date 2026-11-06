@@ -10,15 +10,22 @@ Nexora is an Android phone app that controls Android TV and set-top boxes
 over ADB on your local network. The phone is the ADB host and the TV is the
 target. There is no gateway, cloud backend or companion app on the TV.
 
-> **Status:** early development (v0.1.0). The app builds and runs, but has
-> not yet been verified against a real TV/STB.
+> **Status:** early development. v0.1.0 is tested against a real Android 10
+> set-top box (AX512) over TCP ADB.
+
+## Download
+
+Get the latest signed APK from
+[Releases](https://github.com/drakhaw/nexora/releases/latest). It is a single
+APK for every phone CPU type (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`).
+Check it against the `.sha256` file published next to it.
 
 ## Features
 
 | Area       | What it does                                                                 |
 | ---------- | ---------------------------------------------------------------------------- |
 | Devices    | Save several TVs, pair with Wireless Debugging or connect over legacy TCP ADB, auto-reconnect, revalidate when the app returns to the foreground or the network changes |
-| Remote     | D-pad, OK, Home, Back, volume and media keys, with hold-to-repeat and long press; text input |
+| Remote     | Round D-pad with OK, Home, Back, volume, mute, media and power keys; hold to repeat, long press; text input. Keys reach the TV in about 150 ms (see [Fast key input](#fast-key-input)) |
 | Apps       | List, launch, force-stop, uninstall and install APKs                          |
 | Tools      | Terminal (shell v2 with exit codes, history, saved commands), file browser with upload/download, screenshots |
 | Monitor    | CPU, memory, storage, battery and uptime; values the device does not expose show as "Unavailable" |
@@ -32,7 +39,9 @@ target. There is no gateway, cloud backend or companion app on the TV.
 
 ## Build
 
-Prerequisites: JDK 17 and the Android SDK (platform 36, build-tools 36.0.0).
+Prerequisites: the Android SDK (platform 36). Gradle needs a JDK to run; the
+JDK 17 toolchain used for compiling is downloaded automatically if it is not
+installed. Missing SDK packages are installed by the Android Gradle plugin.
 
 1. Point Gradle at your SDK in `local.properties` (not committed):
 
@@ -103,7 +112,26 @@ with the same key, so losing it means users must uninstall to upgrade.
 2. In Nexora, open **Devices**:
    - **Pair** for Wireless Debugging: enter the pairing IP, port and code shown on the TV.
    - **Add device** for TCP ADB: enter the TV's IP and port (default `5555`).
-3. Tap **Connect** and accept the "Allow debugging" prompt on the TV the first time.
+3. Tap **Connect**. The first time, the card shows **Accept the debugging
+   prompt on the TV…**: on the TV, tick **Always allow from this computer**
+   and tap **Allow** within 60 seconds.
+
+If the prompt does not appear, check that ADB debugging is still enabled on the
+TV, then tap **Connect** again.
+
+## Fast key input
+
+`input keyevent` starts a new Java VM on the TV for every key, which takes
+about a second on low-end set-top boxes. Nexora instead ships a small key
+injector ([`app/src/inputserver`](app/src/inputserver)), built into a
+standalone dex of a few KB and bundled as an asset.
+
+When the Remote tab opens, the app pushes it to
+`/data/local/tmp/nexora-input-<hash>.jar` (only when it changed), checks it
+with `--check`, and starts it once under `app_process` as the shell user. Each
+key press is then one line on its stdin and is injected in a few milliseconds.
+Starting it takes 1–2 seconds. If any step fails, keys fall back to
+`input keyevent`. Text is still sent with `input text`.
 
 ## Tech stack
 
@@ -124,7 +152,9 @@ app/src/main/java/im/wisnu/nexora/
 ├── feature/     Compose screens and ViewModels (devices, remote, apps, tools, monitoring, splash)
 ├── navigation/  App navigation
 └── ui/theme/    Nexora design tokens and theme
-media/           Brand assets (banner, splash reference)
+app/src/inputserver/  Key injector that runs on the TV (see Fast key input)
+.github/workflows/    Release workflow
+media/                Brand assets (banner, splash reference)
 ```
 
 ## Support
