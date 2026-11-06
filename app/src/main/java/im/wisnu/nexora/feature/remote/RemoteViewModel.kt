@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import im.wisnu.nexora.core.adb.AdbResult
 import im.wisnu.nexora.core.adb.ConnectionState
+import im.wisnu.nexora.core.adb.isUsable
 import im.wisnu.nexora.domain.device.DeviceConnections
 import im.wisnu.nexora.domain.device.SelectedDevice
 import im.wisnu.nexora.domain.remote.RemoteController
@@ -14,13 +15,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class RemoteViewModel @Inject constructor(
-    connections: DeviceConnections,
+    private val connections: DeviceConnections,
     private val remote: RemoteController,
 ) : ViewModel() {
 
@@ -29,6 +33,17 @@ class RemoteViewModel @Inject constructor(
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    init {
+        // Start the key injector while the user looks at the remote, not on the first press.
+        viewModelScope.launch {
+            connections.selected
+                .map { s -> s.device?.id?.takeIf { s.state.isUsable } }
+                .distinctUntilChanged()
+                .filterNotNull()
+                .collect { remote.prepare() }
+        }
+    }
 
     fun press(key: RemoteKey, longPress: Boolean) {
         viewModelScope.launch { report(remote.press(key, longPress)) }
