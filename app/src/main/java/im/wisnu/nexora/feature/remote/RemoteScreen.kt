@@ -1,5 +1,6 @@
 package im.wisnu.nexora.feature.remote
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -25,10 +27,6 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PowerSettingsNew
@@ -45,11 +43,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,6 +69,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,6 +79,10 @@ import im.wisnu.nexora.feature.common.RequireConnected
 import im.wisnu.nexora.ui.theme.NexoraTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 
 /** Keys that send a long press when held (REM-05). */
 private val longPressKeys = setOf(RemoteKey.Center, RemoteKey.Home, RemoteKey.Back)
@@ -115,93 +126,189 @@ fun RemoteScreen(vm: RemoteViewModel = hiltViewModel()) {
     }
 }
 
+/** Inner OK circle radius as a fraction of the pad radius. */
+private const val CENTER_FRACTION = 0.42f
+
+/**
+ * Round D-pad: four wedge sectors split by diagonal gaps around an OK circle.
+ * One touch handler picks the key from where the finger lands, so the whole
+ * wedge is the hit area, not just the arrow.
+ */
 @Composable
 private fun DPad(onPress: (RemoteKey, Boolean) -> Unit) {
+    var pressed by remember { mutableStateOf<RemoteKey?>(null) }
+    val padSize = 280.dp
     Box(
-        Modifier.size(240.dp).clip(CircleShape).background(NexoraTokens.Surface),
+        Modifier
+            .size(padSize)
+            .clip(CircleShape)
+            .keyGestures(keyAt = ::dpadKeyAt, onPress = onPress, onPressedChange = { pressed = it }),
         contentAlignment = Alignment.Center,
     ) {
-        KeyButton(RemoteKey.Up, Icons.Outlined.KeyboardArrowUp, onPress, Modifier.align(Alignment.TopCenter).padding(8.dp))
-        KeyButton(RemoteKey.Down, Icons.Outlined.KeyboardArrowDown, onPress, Modifier.align(Alignment.BottomCenter).padding(8.dp))
-        KeyButton(RemoteKey.Left, Icons.AutoMirrored.Outlined.KeyboardArrowLeft, onPress, Modifier.align(Alignment.CenterStart).padding(8.dp))
-        KeyButton(RemoteKey.Right, Icons.AutoMirrored.Outlined.KeyboardArrowRight, onPress, Modifier.align(Alignment.CenterEnd).padding(8.dp))
-        KeyButton(RemoteKey.Center, null, onPress, size = 88.dp, shape = CircleShape, accent = true)
+        Canvas(Modifier.fillMaxSize()) { drawDPad(pressed) }
+        Text(
+            RemoteKey.Center.label,
+            color = NexoraTokens.TextPrimary,
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        // Invisible targets that carry each key's accessibility actions.
+        val step = padSize * 0.36f
+        DPadSemantics(RemoteKey.Up, onPress, Modifier.offset(y = -step))
+        DPadSemantics(RemoteKey.Down, onPress, Modifier.offset(y = step))
+        DPadSemantics(RemoteKey.Left, onPress, Modifier.offset(x = -step))
+        DPadSemantics(RemoteKey.Right, onPress, Modifier.offset(x = step))
+        DPadSemantics(RemoteKey.Center, onPress, Modifier)
     }
 }
 
+@Composable
+private fun DPadSemantics(key: RemoteKey, onPress: (RemoteKey, Boolean) -> Unit, modifier: Modifier) {
+    Box(modifier.size(56.dp).keySemantics(key, onPress))
+}
+
+private fun dpadKeyAt(position: Offset, size: IntSize): RemoteKey? {
+    val radius = size.width / 2f
+    val dx = position.x - radius
+    val dy = position.y - size.height / 2f
+    val distance = hypot(dx, dy)
+    return when {
+        distance > radius -> null
+        distance <= radius * CENTER_FRACTION -> RemoteKey.Center
+        abs(dx) > abs(dy) -> if (dx > 0) RemoteKey.Right else RemoteKey.Left
+        else -> if (dy > 0) RemoteKey.Down else RemoteKey.Up
+    }
+}
+
+/** Sector start angles in degrees, clockwise from the positive x axis, each 90 degrees wide. */
+private val sectorAngles = mapOf(
+    RemoteKey.Right to -45f,
+    RemoteKey.Down to 45f,
+    RemoteKey.Left to 135f,
+    RemoteKey.Up to 225f,
+)
+
+private fun DrawScope.drawDPad(pressed: RemoteKey?) {
+    val radius = size.minDimension / 2f
+    val inner = radius * CENTER_FRACTION
+    val gap = 2.dp.toPx()
+    val base = NexoraTokens.SurfaceElevated
+    val highlight = NexoraTokens.Accent.copy(alpha = 0.35f).compositeOver(base)
+
+    drawCircle(base, radius)
+    sectorAngles[pressed]?.let { start ->
+        drawArc(highlight, start, 90f, useCenter = true, topLeft = Offset.Zero, size = Size(size.width, size.height))
+    }
+
+    // Diagonal gaps between the wedges.
+    for (i in 0 until 4) {
+        val angle = Math.toRadians(45.0 + 90.0 * i)
+        val dir = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+        drawLine(NexoraTokens.Background, center + dir * inner, center + dir * radius, strokeWidth = gap)
+    }
+
+    // OK circle with a ring in the gap color.
+    drawCircle(if (pressed == RemoteKey.Center) highlight else base, inner)
+    drawCircle(NexoraTokens.Background, inner, style = Stroke(width = gap * 1.5f))
+
+    // Filled triangle arrows, drawn pointing up and rotated into place.
+    val arrowCenter = radius * 0.72f
+    val half = radius * 0.11f
+    val arrow = Path().apply {
+        moveTo(center.x, center.y - arrowCenter - half * 0.9f)
+        lineTo(center.x + half, center.y - arrowCenter + half * 0.7f)
+        lineTo(center.x - half, center.y - arrowCenter + half * 0.7f)
+        close()
+    }
+    for (degrees in listOf(0f, 90f, 180f, 270f)) {
+        rotate(degrees, pivot = center) { drawPath(arrow, NexoraTokens.TextPrimary) }
+    }
+}
+
+/** Accessibility actions mirror tap and long press. */
+private fun Modifier.keySemantics(key: RemoteKey, onPress: (RemoteKey, Boolean) -> Unit): Modifier =
+    semantics {
+        role = Role.Button
+        contentDescription = key.label
+        onClick { onPress(key, false); true }
+        if (key in longPressKeys) onLongClick(label = "Long press") { onPress(key, true); true }
+    }
+
 /**
- * A remote key. Repeatable keys repeat while held; OK/Home/Back send a long
- * press when held past 500 ms. Accessibility actions mirror tap and long press.
+ * Press handling shared by every key. [keyAt] maps the touch-down point to a
+ * key (null ignores the touch). Repeatable keys repeat while held; OK/Home/Back
+ * send a long press when held past 500 ms.
  */
+@Composable
+private fun Modifier.keyGestures(
+    keyAt: (Offset, IntSize) -> RemoteKey?,
+    onPress: (RemoteKey, Boolean) -> Unit,
+    onPressedChange: (RemoteKey?) -> Unit,
+): Modifier {
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val currentKeyAt by rememberUpdatedState(keyAt)
+    val currentOnPress by rememberUpdatedState(onPress)
+    val currentOnPressedChange by rememberUpdatedState(onPressedChange)
+    return pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown()
+            val key = currentKeyAt(down.position, size) ?: return@awaitEachGesture
+            currentOnPressedChange(key)
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (key.repeatable) {
+                currentOnPress(key, false)
+                val repeater = scope.launch {
+                    delay(400)
+                    while (true) {
+                        currentOnPress(key, false)
+                        delay(110)
+                    }
+                }
+                waitForUpOrCancellation()
+                repeater.cancel()
+            } else {
+                var released = false
+                var cancelled = false
+                withTimeoutOrNull(500) {
+                    if (waitForUpOrCancellation() == null) cancelled = true else released = true
+                }
+                when {
+                    released -> currentOnPress(key, false)
+                    cancelled -> Unit
+                    else -> {
+                        currentOnPress(key, key in longPressKeys)
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        waitForUpOrCancellation()
+                    }
+                }
+            }
+            currentOnPressedChange(null)
+        }
+    }
+}
+
+/** A square remote key outside the D-pad. */
 @Composable
 private fun KeyButton(
     key: RemoteKey,
-    icon: ImageVector?,
+    icon: ImageVector,
     onPress: (RemoteKey, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
     shape: Shape = RoundedCornerShape(NexoraTokens.CardRadius),
-    accent: Boolean = false,
 ) {
-    val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
     var pressed by remember { mutableStateOf(false) }
-    val supportsLong = key in longPressKeys
-    val base = if (accent) NexoraTokens.Accent else NexoraTokens.SurfaceElevated
-
+    val base = NexoraTokens.SurfaceElevated
     Box(
         modifier
             .size(size)
             .clip(shape)
             .background(if (pressed) base.copy(alpha = 0.6f) else base)
-            .semantics {
-                role = Role.Button
-                contentDescription = key.label
-                onClick { onPress(key, false); true }
-                if (supportsLong) onLongClick(label = "Long press") { onPress(key, true); true }
-            }
-            .pointerInput(key) {
-                awaitEachGesture {
-                    awaitFirstDown()
-                    pressed = true
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (key.repeatable) {
-                        onPress(key, false)
-                        val repeater = scope.launch {
-                            delay(400)
-                            while (true) {
-                                onPress(key, false)
-                                delay(110)
-                            }
-                        }
-                        waitForUpOrCancellation()
-                        repeater.cancel()
-                    } else {
-                        var released = false
-                        var cancelled = false
-                        withTimeoutOrNull(500) {
-                            if (waitForUpOrCancellation() == null) cancelled = true else released = true
-                        }
-                        when {
-                            released -> onPress(key, false)
-                            cancelled -> Unit
-                            else -> {
-                                onPress(key, supportsLong)
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                waitForUpOrCancellation()
-                            }
-                        }
-                    }
-                    pressed = false
-                }
-            },
+            .keySemantics(key, onPress)
+            .keyGestures(keyAt = { _, _ -> key }, onPress = onPress, onPressedChange = { pressed = it != null }),
         contentAlignment = Alignment.Center,
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = NexoraTokens.TextPrimary)
-        } else {
-            Text(key.label, color = NexoraTokens.Background, style = MaterialTheme.typography.titleMedium)
-        }
+        Icon(icon, contentDescription = null, tint = NexoraTokens.TextPrimary)
     }
 }
 
