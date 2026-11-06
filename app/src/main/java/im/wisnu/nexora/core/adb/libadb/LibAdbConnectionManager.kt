@@ -10,12 +10,15 @@ import java.util.concurrent.TimeUnit
 internal class LibAdbConnectionManager(
     private val identity: HostIdentity,
     handshakeTimeoutMillis: Long,
+    throwOnUnauthorised: Boolean = true,
 ) : AbsAdbConnectionManager() {
 
     init {
         // Default is Long.MAX_VALUE; always bound the handshake (SEC-10).
         setTimeout(handshakeTimeoutMillis, TimeUnit.MILLISECONDS)
-        setThrowOnUnauthorised(true)
+        // true: fail fast when the signature is rejected. false: send the public key,
+        // which makes the target show its authorization prompt, then wait for it.
+        setThrowOnUnauthorised(throwOnUnauthorised)
     }
 
     override fun getPrivateKey(): PrivateKey = identity.privateKey

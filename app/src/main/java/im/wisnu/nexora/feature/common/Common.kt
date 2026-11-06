@@ -36,6 +36,7 @@ fun RequireConnected(selected: SelectedDevice, content: @Composable () -> Unit) 
 fun ConnectionState.label(): String = when (this) {
     ConnectionState.Connected -> "connected"
     ConnectionState.Connecting -> "connecting"
+    ConnectionState.AwaitingApproval -> "waiting for approval on the TV"
     ConnectionState.Validating -> "validating"
     ConnectionState.Disconnected -> "disconnected"
     ConnectionState.PairingRequired -> "pairing required"

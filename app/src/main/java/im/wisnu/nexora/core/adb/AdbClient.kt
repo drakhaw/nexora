@@ -19,14 +19,23 @@ interface AdbClient {
         timeout: Duration = DEFAULT_TIMEOUT,
     ): AdbResult<Unit>
 
-    /** Opens an authenticated transport. Legacy TCP and TLS are negotiated by the target. */
+    /**
+     * Opens an authenticated transport. Legacy TCP and TLS are negotiated by the target.
+     *
+     * If the target does not yet trust this phone's key, the public key is sent so the
+     * target shows its "Allow USB debugging?" prompt. [onAwaitingApproval] is called
+     * then, and the call waits up to [approvalTimeout] for the user to accept.
+     */
     suspend fun connect(
         endpoint: AdbEndpoint,
         timeout: Duration = DEFAULT_TIMEOUT,
+        approvalTimeout: Duration = APPROVAL_TIMEOUT,
+        onAwaitingApproval: () -> Unit = {},
     ): AdbResult<AdbSession>
 
     companion object {
         val DEFAULT_TIMEOUT: Duration = 5.seconds
+        val APPROVAL_TIMEOUT: Duration = 60.seconds
     }
 }
 

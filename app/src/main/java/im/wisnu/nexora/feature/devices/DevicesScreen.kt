@@ -188,7 +188,7 @@ private fun DeviceCard(
                         OutlinedButton(onClick = onDisconnect) { Text("Disconnect") }
                         Button(onClick = onReadInfo) { Text("Device info") }
                     }
-                    ConnectionState.Connecting, ConnectionState.Validating -> Unit
+                    ConnectionState.Connecting, ConnectionState.AwaitingApproval, ConnectionState.Validating -> Unit
                     else -> Button(onClick = onConnect) { Text("Connect") }
                 }
                 Spacer(Modifier.weight(1f))
@@ -210,10 +210,11 @@ private fun StateLabel(state: ConnectionState) {
     val (label, color) = when (state) {
         ConnectionState.Connected -> "Connected" to NexoraTokens.Success
         ConnectionState.Connecting -> "Connecting…" to NexoraTokens.Warning
+        ConnectionState.AwaitingApproval -> "Accept the debugging prompt on the TV…" to NexoraTokens.Warning
         ConnectionState.Validating -> "Validating…" to NexoraTokens.Warning
         ConnectionState.Disconnected -> "Disconnected" to NexoraTokens.TextSecondary
         ConnectionState.PairingRequired -> "Pairing required" to NexoraTokens.Warning
-        ConnectionState.Unauthorized -> "Unauthorized: accept the prompt on the TV" to NexoraTokens.Error
+        ConnectionState.Unauthorized -> "Not authorized: the TV prompt was not accepted" to NexoraTokens.Error
         is ConnectionState.Error -> "Error: ${state.error.describe()}" to NexoraTokens.Error
     }
     Row(verticalAlignment = Alignment.CenterVertically) {

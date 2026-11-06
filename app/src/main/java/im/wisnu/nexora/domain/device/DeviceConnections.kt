@@ -99,7 +99,10 @@ class DeviceConnections @Inject constructor(
         val device = devices.get(id) ?: return
         dropSession(id)
         setState(id, ConnectionState.Connecting)
-        when (val result = adb.connect(device.endpoint)) {
+        val result = adb.connect(device.endpoint, onAwaitingApproval = {
+            setState(id, ConnectionState.AwaitingApproval)
+        })
+        when (result) {
             is AdbResult.Ok -> {
                 lock.withLock { sessions[id] = result.value }
                 devices.markChecked(id, System.currentTimeMillis())

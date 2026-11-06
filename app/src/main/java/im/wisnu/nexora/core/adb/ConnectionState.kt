@@ -4,6 +4,8 @@ package im.wisnu.nexora.core.adb
 sealed interface ConnectionState {
     data object Disconnected : ConnectionState
     data object Connecting : ConnectionState
+    /** Public key sent; waiting for the user to accept the debugging prompt on the target. */
+    data object AwaitingApproval : ConnectionState
     data object Validating : ConnectionState
     data object PairingRequired : ConnectionState
     data object Unauthorized : ConnectionState
