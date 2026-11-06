@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Mark drawn in a 200-unit grid, scaled into the 66dp safe zone. -->
+    <group
+        android:translateX="26.256"
+        android:translateY="28.296"
+        android:scaleX="0.272"
+        android:scaleY="0.272">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M150,51 L191,10 L191,156 L150,156 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M12,180 L54,138 L54,78 L24,50 C18,52 12,56 12,62 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M12,64 C12,42 28,31 50,31 C58,31 64,31.5 70,37 L191,147 L191,152 C191,163 180,171 165,171 C156,171 150,169 144,165 L24,52 C18,54 12,58 12,64 Z" />
+    </group>
+</vector>

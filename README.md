@@ -1,0 +1,94 @@
+<p align="center">
+  <img src="media/banner.jpg" alt="Nexora" width="100%">
+</p>
+
+# Nexora
+
+**Your Android TV. Under your control.**
+
+Nexora is an Android phone app that controls Android TV and set-top boxes
+over ADB on your local network. The phone is the ADB host and the TV is the
+target. There is no gateway, cloud backend or companion app on the TV.
+
+> **Status:** early development (v0.1.0). The app builds and runs, but has
+> not yet been verified against a real TV/STB.
+
+## Features
+
+| Area       | What it does                                                                 |
+| ---------- | ---------------------------------------------------------------------------- |
+| Devices    | Save several TVs, pair with Wireless Debugging or connect over legacy TCP ADB, auto-reconnect, revalidate when the app returns to the foreground or the network changes |
+| Remote     | D-pad, OK, Home, Back, volume and media keys, with hold-to-repeat and long press; text input |
+| Apps       | List, launch, force-stop, uninstall and install APKs                          |
+| Tools      | Terminal (shell v2 with exit codes, history, saved commands), file browser with upload/download, screenshots |
+| Monitor    | CPU, memory, storage, battery and uptime; values the device does not expose show as "Unavailable" |
+
+## Requirements
+
+- **Phone:** Android 8.0 (API 26) or newer.
+- **TV/STB:** Android with Developer options enabled, plus either
+  Wireless Debugging (Android 11+) or ADB over network (TCP, usually port 5555).
+- Phone and TV on the same trusted Wi-Fi or Ethernet network.
+
+## Build
+
+Prerequisites: JDK 17 and the Android SDK (platform 36, build-tools 36.0.0).
+
+1. Point Gradle at your SDK in `local.properties` (not committed):
+
+   ```properties
+   sdk.dir=/path/to/Android/Sdk
+   ```
+
+2. Build and test:
+
+   ```bash
+   ./gradlew :app:assembleDebug
+   ./gradlew :app:testDebugUnitTest
+   ```
+
+3. Install on a phone connected over USB:
+
+   ```bash
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+`./gradlew :app:assembleRelease` produces an unsigned, R8-minified APK.
+Release signing is not set up yet; keep keystores and their passwords out of
+the repository (they are ignored by `.gitignore`).
+
+## Connecting to a TV
+
+1. On the TV, enable **Developer options** and either **Wireless debugging**
+   or **ADB debugging / network debugging**.
+2. In Nexora, open **Devices**:
+   - **Pair** for Wireless Debugging: enter the pairing IP, port and code shown on the TV.
+   - **Add device** for TCP ADB: enter the TV's IP and port (default `5555`).
+3. Tap **Connect** and accept the "Allow debugging" prompt on the TV the first time.
+
+## Tech stack
+
+Kotlin, Jetpack Compose (Material 3), Hilt, Room, DataStore, Navigation,
+Coroutines/Flow. ADB transport uses
+[libadb-android](https://github.com/MuntashirAkon/libadb-android); the shell
+v2 and sync protocols are implemented in the app
+(`core/adb/protocol`). The ADB host key is stored encrypted with an
+Android Keystore key.
+
+## Project layout
+
+```
+app/src/main/java/im/wisnu/nexora/
+├── core/        ADB interfaces and libadb implementation, protocols, security, network, lifecycle
+├── data/        Room database, repositories, DataStore preferences
+├── domain/      Devices, remote, apps, tools, monitoring logic
+├── feature/     Compose screens and ViewModels (devices, remote, apps, tools, monitoring, splash)
+├── navigation/  App navigation
+└── ui/theme/    Nexora design tokens and theme
+media/           Brand assets (banner, splash reference)
+```
+
+## Support
+
+If Nexora is useful to you, you can support development via
+[PayPal](https://paypal.me/DRaWisnu).

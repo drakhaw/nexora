@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand palette (Nexora guide). -->
+    <color name="nexora_midnight">#0B1220</color>
+    <color name="nexora_icon_tile">#070C18</color>
+    <!-- Splash backdrop, sampled from media/splash.png. -->
+    <color name="nexora_splash">#03081A</color>
+</resources>
